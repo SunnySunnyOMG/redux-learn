@@ -164,8 +164,8 @@ const mapDispatchToProps = (dispatch, own_props) => {
 
 ```js
 const mapDispatchToProps = {
-  onClickAdd: () => dispatch(starNumModifyAction(ADD)),
-  onClickMinus: () => dispatch(starNumModifyAction(MINUS))
+  onClickAdd: () => starNumModifyAction(ADD),
+  onClickMinus: () => starNumModifyAction(MINUS)
 }
 ```
 此时 `mapDispatchToProps` 是一个对象， 它的每个key对应一个prop， value则是一个函数，会被当做 Action Creator，返回的Action会被redux自动发出
