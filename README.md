@@ -168,7 +168,7 @@ const mapDispatchToProps = {
   onClickMinus: () => starNumModifyAction(MINUS)
 }
 ```
-此时 `mapDispatchToProps` 是一个对象， 它的每个key对应一个prop， value则是一个函数，会被当做 Action Creator，返回的Action会被redux自动发出
+此时 `mapDispatchToProps` 是一个对象， 它的每个key对应一个value， value则是一个函数，会被当做 Action Creator，返回的Action会被redux自动发出
 
 ### API：< Provider >
 用于将store中的state传入container， 一般来说可以在最上层传入，这样所有子组件都可以拿到store的state， 如下
