@@ -16,4 +16,9 @@ const Stars = ({ starNum, litStarNum }) => {
   return <div style={styles.stars}>{stars}</div>
 }
 
+Stars.defaultProps = {
+  starNum:6,
+  litStarNum:1
+}
+
 export default Stars;

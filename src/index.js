@@ -6,8 +6,16 @@ import registerServiceWorker from './registerServiceWorker';
 
 import { Provider } from 'react-redux';
 import storeConfig from './stores';
+import Immutable from 'immutable';
 
-const store = storeConfig({ starNum: 4, litStarNum: 2 });
+const $$init_state = Immutable.fromJS({
+  ratingStarState: { starNum: 4, litStarNum: 2 },
+  delayAddState: { isFetching: false }
+})
+
+
+
+const store = storeConfig($$init_state);
 
 ReactDOM.render(
   <Provider store={store}>
