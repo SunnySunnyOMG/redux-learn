@@ -188,6 +188,250 @@ registerServiceWorker();
 
 ###### 传入原理利用了React组件的 [contex属性](https://reactjs.org/docs/context.html)
 
+## Redux高级用法
+上文讲述了redux的概念和react-redux的基本用法，但其中用到的action皆为同步操作，本节将重点介绍redux是如何处理异步操作的
+### 异步操作的思路
+redux的基本理念就是用户/View不能直接更新store， 而是需要发出一个Action去运行reducer，而后得到新的state。
+那么我们现在以一个异步的服务器请求为例， 讲解redux中异步操作的流程。 一个异步请求基本模型如下：
+
+**用户发出request ---->（一段时间....）----> 得到response（可能成功也可能失败）**
+
+#### - Async Actions
+所以不同于同步操作对应一Action，一个异步操作中一般会至少存在3种Action：
+
+> * 请求开始时的 Action
+> * 请求成功时的 Action OR
+> * 请求失败时的 Action
+
+三种Action的区别可以通过使用不同的 Action Type 或者在action中加入不同的payload来区分， 比如
+
+```js
+// 写法一：Action type相同， payload不同
+{ type: 'DELAY_ADD' }
+{ type: 'DELAY_ADD', status: 'success_status', response: { ... } }
+{ type: 'DELAY_ADD', status: 'error_status', error: { ... } }
+
+
+// 写法二：Action type不同
+{ type: 'DELAY_ADD_REQUEST' }
+{ type: 'DELAY_ADD_SUCCESS', resposne: { ... } }
+{ type: 'DELAY_ADD_FAILURE', response: { ... } }
+```
+个人更加倾向于第二种写法， 因为这样可以减少由于某些type error带来的错误。
+
+#### - Async State
+
+除了Action被分解成3个以外， 我们也需要增加相关的state来作为异步操作的标志位，比如
+
+```js
+let state = {
+	isFetching: true/false, // 标识异步操作是否在进行中
+	lastUpdateTime： timeStamp， // 标识响应获取的时间， 可用于判定更新时间	
+  response： { ... some data } // store中用于存储异步操作的结果
+}
+```
+
+#### - 改造Action Creator
+所以，根据以上，我们可以总结出Redux中异步操作的一般流程：
+
+>* 异步操作开始时， 立刻发出一个Action（上文 DELAY\_ADD_REQUEST), 改变state以表示请求进行中（i.e. isFetching），触发View的信息读取界面（i.e. loading）
+>* 异步操作结束时，再发出一个Action（上文 DELAY\_ADD_SUCCESS/FAILURE）以表示操作结束，更新相关state以触发View的重新渲染
+
+也就是说，现在每个异步操作都至少触发两个Action，为了在异步操作结束时自动再dispatch出一个Action，我们为此需要改造Action Creator， 写的写法如下：
+
+```js
+export const starNumDelayAddAsyncAction = () => {
+  return dispatch => {
+    dispatch({ type: DELAY_ADD_REQUEST });
+    // 异步服务器请求
+    mockAsyncServerCall(
+      // success callback
+      (response) => dispatch({ type: DELAY_ADD_SUCCESS, payload: response }),
+      // fail callback
+      (response) => dispatch({ type: DELAY_ADD_FAILURE, payload: response })
+    )
+  }
+}
+```
+暂且忽略其中的dispatch方法是如何得到的（下文会介绍），现在先总结此Action Creator的特点：
+
+>* 不同于一般的Action Creator会返回一个对象， 此Action Creator实际上返回了一个函数
+>* 返回函数首先 dispatch出第一个Action表示异步操作开始，然后运行异步函数， 并在异步函数的回调（也可以使用Promise）中dispatch出第二个Action表示异步操作的成功/失败
+
+>**注意：**
+>
+>此时dipatch方法实际发出的是一个函数， 而在一般Redux框架下，dispatch仅能发出一个Action（Object），为了能够使dispatch方法发出一个函数，我们需要使用Redux中的API引入中间件（Middleware）
+
+
+### 中间件（Middleware）
+#### - 中间件概念
+为了理解中间件，让我们站在框架作者的角度思考问题：如果要添加功能，你会在哪个环节添加？
+
+>It provides a third-party extension point between dispatching an
+action, and the moment it reaches the reducer.
+
+这是 redux 作者 Dan 对 middleware 的描述，middleware 提供了一个分类处理 action 的机会，添加在了dispatch方法上, 在 middleware 中你可以检阅每一个流过的 action，挑选出特定类型的 action 进行相应操作，给你
+次改变 action 的机会。注： 此部分转自[这里](http://www.ruanyifeng.com/blog/2016/09/redux_tutorial_part_two_async_operations.html)
+
+下图展示了Middleware的插入结构：
+![middleware model](https://dn-myg6wstv.qbox.me/b611ebe4e60eeee99d68.png?imageView2/0/w/1280/h/960/ignore-error/1)
+
+**简而言之， 中间件具有以下特点：**
+
+* 中间件（Middleware）强化了Redux环节中的Dispatch部分
+* 浏览源码会发现，Middleware被放在一个数组中，会在每次调用Dispatch前先依次被调用
+* 每个中间件都可以拿到 store 的 `getState()`和`dispatch()`方法
+
+#### - 中间件用法
+API：`createStore()` 除了前两个参数（分别接受 reducer 和 initial state）之外，还接受第三个参数 `applyMiddleware()`， 在`applyMiddleware()`中声明使用的Middleware， 案例代码如下：
+
+```js
+import { createStore, applyMiddleware  } from 'redux';
+import thunk from 'redux-thunk';
+
+createStore(ratingStarReducer, init_state, applyMiddleware(thunk));
+```
+上述代码中的中间件 redux-thunk 就增强了`dispatch()`的功能，使其能够接受一个函数作为参数
+
+> 注意
+> 
+> `applyMiddleware()`所接受的Middleware参数是有顺序之分的（e.g. redux-logger 这个中间件就需要作为`applyMiddleware()`的最后的参数传入），在引入第三方库的时候需要认真查阅文档。
+
+
+
+### Reducer分割 (API: combineReducers)
+在实际开发中，我们有时需要不止一个的reducer来处理各种业务逻辑， 而`createStore()`仅仅接受一个参数作为reducer传入，所以我们要引入新的API：`combineReducers()`来将各种Reducer合并。
+
+* 若仅有一个Reducer，那么我们在此reducer中声明的所有state将会在store的根属性上被创建，
+也就是说下面代码：
+
+```js
+// Reducer declaration
+const ratingStar = (state = { starNum: 5, litStarNum: 3 }, action) => {
+  console.log('store state:', state)
+  switch (action.type) {
+    case ADD:
+    case DELAY_ADD_SUCCESS:
+      return state.get('starNum') < 20 ? state.set('starNum', state.get('starNum') + 1) : state;
+    
+    case MINUS:
+      return state.get('starNum') > 0 ? state.set('starNum', state.get('starNum') - 1) : state;
+
+    case CLICK_STAR:
+      return state.set('litStarNum', action.payload + 1);
+
+    default:
+      return state;
+  }
+}
+```
+将会创建以下Store，其中的State为(默认情况)：
+
+```js
+let state = {
+	starNum: 5,
+	litStarNum: 3
+}
+```
+
+* 若仅有多个Reducer，那么我们在此reducer中声明的所有state将会在各自的节点（key）下被创建，当我们新增一个Reducer后：
+
+```js
+// 首先引入API: combineReducers()
+
+const delayAddStarReducer = (state = { isFetching: false, response: null }, action) => {
+  let $$new_state = null;
+  switch (action.type) {
+    case DELAY_ADD_REQUEST:
+      return state.set('isFetching', true);
+
+    case DELAY_ADD_SUCCESS:
+      $$new_state = Immutable.fromJS({
+        //starNum: state.starNum + 1,
+        isFetching: false,
+        response: action.payload
+      })
+      return state.merge($$new_state)
+
+    case DELAY_ADD_FAILURE:
+      $$new_state = Immutable.fromJS({ isFetching: false, response: action.payload });
+      return state.merge($$new_state);
+
+    default: return state;
+  }
+}
+
+const rootReducer = combineReducers({ 
+ratingStarState: ratingStar, 
+delayAddState: delayAddStarReducer 
+});
+```
+
+将会创建以下Store，其中的State为(默认情况)：
+
+```js
+let state = {
+
+  ratingStarState: {
+    starNum: 5,
+	litStarNum: 3
+  },
+  
+  delayAddState: {
+    isFetching: false,
+    response: null
+  }
+  
+}
+```
+** 注意： 使用`combineReducer()`后，每个reducer仅能够接收到本个节点下的state信息 **
+如果一个action可能会引起多个reducer节点下state的变化，解决的办法一般有：
+* 发出多个action，触发多个reducer
+* 发出单个action，触发多个reducer
+
+个人比较倾向于第二种方法，在本例中，一个Action.type == DELAY_ADD_SUCCESS 的 操作，将会引发 state.delayAddState 的变化（fecting结束，显示信息）, 也势必会影响state.ratingStarState.starNum的改变（星星+1），可以使用下面的代码：
+
+```js
+const delayAddStarReducer =（...） => {
+...some codes...
+
+ switch (action.type) {
+    case ADD:
+    case DELAY_ADD_SUCCESS: // common action type
+      return state.get('starNum') < 20 ? state.set('starNum', state.get('starNum') + 1) : state; 
+      
+    ...some codes...
+ }
+}
+
+const delayAddStarReducer = (state = { isFetching: false, response: null }, action) => {
+  let $$new_state = null;
+  switch (action.type) {
+    ...some codes...
+
+    case DELAY_ADD_SUCCESS: // common action type
+      ...do something...
+  }
+```
+通过给两个Reducer设置公共的Action type， 可以实现一个action调用多个reducer
+
+### 不可变数据（Immutable Data）
+#### - Why Immutable
+React 中引入Immutatble data可以给APP执行效率带来极大地提升。建议同学们的可以多多理解这一个非常重要的知识点。
+
+#### - Online resources
+鉴于网上教程的丰富，不可变数据的概念和使用必要性本教程不再赘述，具体信息可以[参考这里](https://github.com/camsong/blog/issues/3)
+
+#### - 3rd-Part Library
+Immutable Data的实现方式有很多， 目前我们选用 Facebook 开源的 immutable.js； 相关文档可以[参考这里](https://facebook.github.io/immutable-js/docs/#/)
+
+
+
+### 异步操作的终极解决方案： Redux-Saga
+
+to do ... 
+
+
 ## 本react-redux demo介绍
 
 ### 文件结构(src文件夹内)
@@ -201,6 +445,7 @@ registerServiceWorker();
 │   └── rating_stars.action.js
 ├── components
 │   ├── button.js
+│   ├── info_panel.js
 │   ├── star.js
 │   └── stars.js
 ├── containers
@@ -236,6 +481,7 @@ registerServiceWorker();
 
 实现了一个简单的评分系统，
  
-* 按ADD按钮可以增加星星上限， 
-* 按MINUS按钮可以减少总星星个数， 
+* 按ADD按钮可以增加星星上限
+* 按MINUS按钮可以减少总星星个数
+* 按DELAY ADD可以实现异步添加星星上限，并在星星下发给予用户提示
 * 直接点击星星可以点亮包括此星星在内的之前所有星星
