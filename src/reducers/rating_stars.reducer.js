@@ -47,7 +47,7 @@ const delayAddStarReducer = (state = { isFetching: false, response: null }, acti
 
     case DELAY_ADD_FAILURE:
       console.log('delay add fail~', action.payload);
-      let $$new_state = Immutable.fromJS({ isFetching: false, response: action.payload });
+      $$new_state = Immutable.fromJS({ isFetching: false, response: action.payload });
       return state.merge($$new_state);
     //return Object.assign({}, state, new_state);
 
