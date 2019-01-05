@@ -9,7 +9,7 @@ Example for a rating star system using react-redux
 ###### 以上图片来自网络
 
 ### - 数据与UI组件进一步解耦
-![image](https://user-images.githubusercontent.com/23184068/50728730-cb4af100-10fc-11e9-9f01-e135d64f36a0.png) />
+![image](https://user-images.githubusercontent.com/23184068/50728730-cb4af100-10fc-11e9-9f01-e135d64f36a0.png) 
 
 
 
