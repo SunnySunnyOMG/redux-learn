@@ -6,10 +6,12 @@ Example for a rating star system using react-redux
 ### - 数据流动更加清晰
 <img src="https://onsen.io/blog/content/images/2016/Jun/react_redux.png" /> 
 
-### - 数据与UI组件进一步解耦
-<img src="https://cdn.css-tricks.com/wp-content/uploads/2016/03/redux-article-3-03.svg" />
-
 ###### 以上图片来自网络
+
+### - 数据与UI组件进一步解耦
+![image](https://user-images.githubusercontent.com/23184068/50728730-cb4af100-10fc-11e9-9f01-e135d64f36a0.png) />
+
+
 
 ## Redux 基本概念与API
 
